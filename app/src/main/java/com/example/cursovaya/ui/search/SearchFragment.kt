@@ -60,6 +60,7 @@ class SearchFragment : Fragment() {
             viewModel.logout()
             navigator?.openLogin()
         }
+        binding.buttonOpenChat.setOnClickListener { navigator?.openChat() }
         binding.root.findViewById<Button>(com.example.cursovaya.R.id.buttonRefresh).setOnClickListener { viewModel.refresh() }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -98,5 +99,3 @@ class SearchFragment : Fragment() {
         imm.hideSoftInputFromWindow(editText.windowToken, 0)
     }
 }
-
-

@@ -13,12 +13,15 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.cursovaya.AppNavigator
 import com.example.cursovaya.databinding.FragmentLoginBinding
 import kotlinx.coroutines.launch
+import com.example.cursovaya.data.local.AppPrefs
+import com.example.cursovaya.data.network.ApiClient
 
 class LoginFragment : Fragment() {
     private var _binding: FragmentLoginBinding? = null
     private val binding get() = _binding!!
     private val viewModel: AuthViewModel by viewModels()
     private var navigator: AppNavigator? = null
+    private lateinit var prefs: AppPrefs
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -27,11 +30,15 @@ class LoginFragment : Fragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentLoginBinding.inflate(inflater, container, false)
+        prefs = AppPrefs(requireContext().applicationContext)
+        // Инициализируем ApiClient базовым URL из настроек
+        tryInitApiClient()
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.buttonLogin.setOnClickListener {
+            tryInitApiClient()
             viewModel.login(
                 binding.editLogin.text?.toString().orEmpty(),
                 binding.editPassword.text?.toString().orEmpty(),
@@ -42,7 +49,6 @@ class LoginFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
                 viewModel.state.collect { state ->
-                    binding.progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
                     state.errorMessage?.let { message ->
                         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
                         viewModel.clearError()
@@ -53,9 +59,17 @@ class LoginFragment : Fragment() {
         }
     }
 
+    private fun tryInitApiClient() {
+        val url = prefs.serverUrl()
+        try {
+            ApiClient.initWithBaseUrl(url)
+        } catch (e: Exception) {
+            // Игнорируем — ApiClient при некорректном URL выдаст ошибку при запросе
+        }
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
     }
 }
-

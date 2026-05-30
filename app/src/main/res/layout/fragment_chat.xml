@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:id="@+id/chatHeader"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/buttonBack"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:contentDescription=""
+            android:src="@android:drawable/ic_media_previous" />
+
+        <TextView
+            android:id="@+id/textChatTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Чат"
+            android:textAlignment="center"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <Space
+            android:layout_width="36dp"
+            android:layout_height="36dp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/textChatDate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:background="@drawable/chat_date_pill"
+        android:text="Сегодня"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/chatHeader"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/textChatError"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="#B00020"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/textChatDate"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <ProgressBar
+        android:id="@+id/progressChat"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/textChatDate"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerChat"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:clipToPadding="false"
+        android:paddingBottom="12dp"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+        app:stackFromEnd="true"
+        app:layout_constraintTop_toBottomOf="@id/textChatError"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/quickReplies" />
+
+    <LinearLayout
+        android:id="@+id/quickReplies"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="8dp"
+        android:orientation="vertical"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/inputBar">
+
+        <!-- Main topic buttons -->
+        <LinearLayout
+            android:id="@+id/mainTopicButtons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonTopicRoute"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:background="@drawable/chat_quick_reply"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="Маршрут по ID"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonTopicSchedule"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/chat_quick_reply"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="Расписание"
+                android:textAllCaps="false" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonTopicQuestion"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginTop="6dp"
+            android:layout_gravity="end"
+            android:background="@drawable/chat_quick_reply"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="Вопрос по маршруту"
+            android:textAllCaps="false" />
+
+        <!-- Other question button shown while in a scenario -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonOtherQuestion"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginTop="6dp"
+            android:layout_gravity="end"
+            android:visibility="gone"
+            android:background="@drawable/chat_quick_reply"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="Другой вопрос"
+            android:textAllCaps="false" />
+
+        <!-- Buttons shown after a route is selected -->
+        <LinearLayout
+            android:id="@+id/routeActionButtons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:visibility="gone"
+            android:layout_marginTop="6dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonChangeTime"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:background="@drawable/chat_quick_reply"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="Время"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonChangeDate"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/chat_quick_reply"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="Дата"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonChangeRoute"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/chat_quick_reply"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="Маршрут"
+                android:textAllCaps="false" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/inputBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Сообщение"
+            app:boxBackgroundMode="none">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editChatInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/chat_input_background"
+                android:imeOptions="actionSend"
+                android:inputType="text"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <Button
+            android:id="@+id/buttonSend"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:text="Отправить"
+            android:textAllCaps="false" />
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

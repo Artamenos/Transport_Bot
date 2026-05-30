@@ -1,6 +1,5 @@
 package com.example.cursovaya.data.network
 
-import com.example.cursovaya.BuildConfig
 import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -8,9 +7,10 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object ApiClient {
-    private const val BASE_URL = BuildConfig.BASE_URL
+    @Volatile
+    private var retrofitInstance: Retrofit? = null
 
-    val api: TransportApi by lazy {
+    fun initWithBaseUrl(baseUrl: String) {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
@@ -18,12 +18,15 @@ object ApiClient {
             .addInterceptor(loggingInterceptor)
             .build()
 
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
+        val gson = GsonBuilder().setLenient().create()
+        retrofitInstance = Retrofit.Builder()
+            .baseUrl(baseUrl)
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create(GsonBuilder().create()))
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
-            .create(TransportApi::class.java)
     }
-}
 
+    val api: TransportApi
+        get() = retrofitInstance?.create(TransportApi::class.java)
+            ?: throw IllegalStateException("ApiClient not initialized. Call ApiClient.initWithBaseUrl(url) first")
+}

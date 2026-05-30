@@ -15,7 +15,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.callloging.CallLogging
-
+import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.http.*
 fun main() {
     embeddedServer(Netty, host = "0.0.0.0", port = 8080) {
         module()
@@ -24,6 +25,15 @@ fun main() {
 
 fun Application.module() {
     install(CallLogging)
+    install(CORS) {
+        anyHost()
+        allowHeader(HttpHeaders.ContentType)
+        allowHeader(HttpHeaders.Authorization)
+        allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Delete)
+        allowMethod(HttpMethod.Options)
+    }
     install(ContentNegotiation) {
         gson { setPrettyPrinting() }
     }
@@ -104,6 +114,37 @@ fun Application.module() {
                 call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
             }
         }
+
+        get("/api/chat") {
+            val token = call.bearerToken()
+            try {
+                call.respond(ChatHistoryResponse(TransportBotDatabase.chatHistory(token)))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            }
+        }
+
+        post("/api/chat") {
+            val token = call.bearerToken()
+            val request = call.receive<ChatSendRequest>()
+            try {
+                call.respond(ChatHistoryResponse(TransportBotDatabase.sendChatMessage(token, request.text, request.topic)))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            } catch (error: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Некорректный запрос"))
+            }
+        }
+
+        delete("/api/chat") {
+            val token = call.bearerToken()
+            try {
+                TransportBotDatabase.clearChat(token)
+                call.respond(MessageResponse("История чата очищена"))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            }
+        }
     }
 }
 
@@ -112,6 +153,3 @@ private fun io.ktor.server.application.ApplicationCall.bearerToken(): String {
     return header.removePrefix("Bearer ").trim().takeIf { it.isNotBlank() }
         ?: throw IllegalStateException("Требуется авторизация")
 }
-
-
-

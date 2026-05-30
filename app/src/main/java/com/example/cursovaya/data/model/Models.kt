@@ -25,6 +25,10 @@ data class TransportRouteDto(
     val destination: String,
     val schedule: String,
     val description: String,
+    val travelDate: String,
+    val departureTime: String,
+    val arrivalTime: String,
+    val fare: String,
 )
 
 data class HistoryRequest(
@@ -39,3 +43,18 @@ data class MessageResponse(
     val message: String,
 )
 
+data class ChatSendRequest(
+    val text: String? = null,
+    val topic: String? = null,
+)
+
+data class ChatMessageDto(
+    val id: Long,
+    val sender: String,
+    val text: String,
+    val createdAt: String,
+)
+
+data class ChatHistoryResponse(
+    val items: List<ChatMessageDto>,
+)

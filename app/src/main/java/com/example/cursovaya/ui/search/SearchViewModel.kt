@@ -24,6 +24,7 @@ data class SearchUiState(
     val errorMessage: String? = null,
     val darkTheme: Boolean = false,
     val displayName: String = "",
+    val showPopularRoutes: Boolean = false,
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -41,6 +42,25 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         applyTheme(repository.isDarkThemeEnabled())
+        loadPopularRoutes()
+    }
+
+    private fun loadPopularRoutes() {
+        viewModelScope.launch {
+            runCatching { repository.loadPopularRoutes() }
+                .onSuccess { routes ->
+                    _state.update {
+                        it.copy(
+                            results = routes,
+                            showPopularRoutes = true,
+                            showHistory = false,
+                        )
+                    }
+                }
+                .onFailure {
+                    // Ошибку игнорируем, будет пусто
+                }
+        }
     }
 
     fun initializeHistory() {
@@ -70,6 +90,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             it.copy(
                 query = query,
                 showHistory = query.isBlank() && it.history.isNotEmpty(),
+                showPopularRoutes = query.isBlank(),
                 showErrorState = false,
                 showEmptyState = false,
                 errorMessage = null,
@@ -91,6 +112,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 it.copy(
                     isLoading = true,
                     showHistory = false,
+                    showPopularRoutes = false,
                     showEmptyState = false,
                     showErrorState = false,
                     errorMessage = null,
@@ -105,6 +127,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                             results = results,
                             history = history,
                             showHistory = false,
+                            showPopularRoutes = false,
                             showEmptyState = results.isEmpty(),
                             showErrorState = false,
                             errorMessage = null,
@@ -116,6 +139,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         it.copy(
                             isLoading = false,
                             showErrorState = true,
+                            showPopularRoutes = false,
                             showEmptyState = false,
                             errorMessage = error.message ?: "Поиск завершился с ошибкой",
                         )
@@ -150,6 +174,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 results = emptyList(),
                 showErrorState = false,
                 showEmptyState = false,
+                showPopularRoutes = false,
                 errorMessage = null,
                 showHistory = it.history.isNotEmpty(),
             )
@@ -183,4 +208,3 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 }
-

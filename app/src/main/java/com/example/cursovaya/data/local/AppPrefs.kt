@@ -1,6 +1,7 @@
 package com.example.cursovaya.data.local
 
 import android.content.Context
+import com.example.cursovaya.BuildConfig
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
@@ -53,6 +54,12 @@ class AppPrefs(context: Context) {
         prefs.edit().remove(KEY_HISTORY).apply()
     }
 
+    fun saveServerUrl(url: String) {
+        prefs.edit().putString(KEY_SERVER_URL, url).apply()
+    }
+
+    fun serverUrl(): String = prefs.getString(KEY_SERVER_URL, BuildConfig.BASE_URL) ?: BuildConfig.BASE_URL
+
     private fun saveHistory(items: List<String>) {
         prefs.edit().putString(KEY_HISTORY, gson.toJson(items)).apply()
     }
@@ -72,6 +79,6 @@ class AppPrefs(context: Context) {
         const val KEY_DISPLAY_NAME = "display_name"
         const val KEY_DARK_THEME = "dark_theme"
         const val KEY_HISTORY = "history"
+        const val KEY_SERVER_URL = "server_url"
     }
 }
-

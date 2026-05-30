@@ -2,6 +2,8 @@ package com.example.cursovaya.data.network
 
 import com.example.cursovaya.data.model.AuthRequest
 import com.example.cursovaya.data.model.AuthResponse
+import com.example.cursovaya.data.model.ChatHistoryResponse
+import com.example.cursovaya.data.model.ChatSendRequest
 import com.example.cursovaya.data.model.HistoryRequest
 import com.example.cursovaya.data.model.HistoryResponse
 import com.example.cursovaya.data.model.SearchResponse
@@ -36,5 +38,16 @@ interface TransportApi {
 
     @DELETE("api/history")
     suspend fun clearHistory(@Header("Authorization") token: String)
-}
 
+    @GET("api/chat")
+    suspend fun chatHistory(@Header("Authorization") token: String): ChatHistoryResponse
+
+    @POST("api/chat")
+    suspend fun sendChat(
+        @Header("Authorization") token: String,
+        @Body request: ChatSendRequest,
+    ): ChatHistoryResponse
+
+    @DELETE("api/chat")
+    suspend fun clearChat(@Header("Authorization") token: String)
+}

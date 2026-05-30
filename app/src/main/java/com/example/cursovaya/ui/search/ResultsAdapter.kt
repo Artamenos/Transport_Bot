@@ -23,11 +23,15 @@ class ResultsAdapter(
 
     inner class ResultViewHolder(private val binding: ItemRouteBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(item: TransportRouteDto) {
-            binding.textRouteNumber.text = "Маршрут №${item.routeNumber}"
+            binding.textRouteNumber.text = "Маршрут ${item.routeNumber}"
             binding.textRouteTitle.text = item.title
-            binding.textRouteType.text = item.transportType
-            binding.textRouteDetails.text = "${item.origin} → ${item.destination}\n${item.schedule}\n${item.description}"
-            binding.root.setOnClickListener { onClick(item) }
+            binding.textRouteType.text = "${item.transportType} | Стоимость: ${item.fare}"
+            binding.textRouteDetails.text = "${item.origin} → ${item.destination}\n${item.travelDate} ${item.departureTime} - ${item.arrivalTime}"
+
+            binding.buttonRouteDetails.setOnClickListener {
+                // Here we could open details, but maybe for now just show a toast or anything
+                android.widget.Toast.makeText(binding.root.context, "Открытие деталей...", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -36,4 +40,3 @@ class ResultsAdapter(
         override fun areContentsTheSame(oldItem: TransportRouteDto, newItem: TransportRouteDto) = oldItem == newItem
     }
 }
-

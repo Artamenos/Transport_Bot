@@ -37,6 +37,11 @@ class SearchRepository(context: Context) {
         return response.results
     }
 
+    suspend fun loadPopularRoutes(): List<TransportRouteDto> {
+        val token = requireToken()
+        return api.search(token, "").results
+    }
+
     suspend fun addHistory(item: String): List<String> {
         val token = requireToken()
         val response = api.addHistory(token, HistoryRequest(item))
@@ -54,4 +59,3 @@ class SearchRepository(context: Context) {
     private fun requireToken(): String = prefs.token()?.let { "Bearer $it" }
         ?: throw IllegalStateException("Требуется повторный вход в приложение")
 }
-
