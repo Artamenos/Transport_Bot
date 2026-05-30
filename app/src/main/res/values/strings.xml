@@ -1,3 +1,34 @@
 <resources>
     <string name="app_name">Транспортный бот</string>
+    <string name="route_number_format">Маршрут %1$s</string>
+    <string name="route_path_format">%1$s → %2$s</string>
+    <string name="route_datetime_format">%1$s • %2$s - %3$s</string>
+    <string name="route_type_fare_format">%1$s • Стоимость: %2$s</string>
+    <string name="route_image_description">Изображение маршрута</string>
+    <string name="chat_title">Чат</string>
+    <string name="chat_today">Сегодня</string>
+    <string name="chat_back">Назад</string>
+    <string name="chat_topic_route">Маршрут по ID</string>
+    <string name="chat_topic_schedule">Расписание</string>
+    <string name="chat_topic_question">Вопрос по маршруту</string>
+    <string name="chat_other_question">Другой вопрос</string>
+    <string name="chat_change_time">Время</string>
+    <string name="chat_change_date">Дата</string>
+    <string name="chat_change_route">Маршрут</string>
+    <string name="chat_message_hint">Сообщение</string>
+    <string name="chat_send_message">Отправить сообщение</string>
+    <string name="cabinet_title">Личный кабинет</string>
+    <string name="cabinet_profile_routes">Мои маршруты</string>
+    <string name="cabinet_route_code">Код: %1$s</string>
+    <string name="cabinet_route_status_assigned">Закреплён</string>
+    <string name="cabinet_route_status_free">Свободен</string>
+    <string name="cabinet_claim_code_hint">Секретный код маршрута</string>
+    <string name="cabinet_claim_route">Закрепить маршрут</string>
+    <string name="cabinet_release_route">Освободить маршрут</string>
+    <string name="cabinet_back">Назад к поиску</string>
+    <string name="cabinet_login">Логин: %1$s</string>
+    <string name="cabinet_empty_routes">У вас пока нет закрепленных маршрутов</string>
+    <string name="search_popular_routes">Популярные маршруты</string>
+    <string name="search_results">Результаты поиска</string>
+    <string name="search_history">История поиска</string>
 </resources>

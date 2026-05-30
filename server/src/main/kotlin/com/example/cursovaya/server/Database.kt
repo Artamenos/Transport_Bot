@@ -7,6 +7,8 @@ import java.sql.DriverManager
 import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.util.UUID
 
 object TransportBotDatabase {
@@ -39,8 +41,10 @@ object TransportBotDatabase {
     fun register(login: String, password: String, displayName: String?): AuthResponse {
         val normalizedLogin = login.trim().lowercase()
         require(normalizedLogin.isNotBlank()) { "Введите логин" }
+        require(normalizedLogin.length <= 64) { "Логин должен содержать не более 64 символов" }
         require(password.length >= 4) { "Пароль должен содержать минимум 4 символа" }
         val name = displayName?.trim().takeUnless { it.isNullOrBlank() } ?: normalizedLogin
+        require(name.length <= 120) { "Имя должно содержать не более 120 символов" }
 
         connection().use { conn ->
             if (userExists(conn, normalizedLogin)) {
@@ -81,34 +85,91 @@ object TransportBotDatabase {
         }
     }
 
-    fun search(query: String): List<TransportRouteDto> {
+    fun search(token: String, query: String): List<TransportRouteDto> {
         val normalizedQuery = query.trim()
-        require(normalizedQuery.isNotBlank()) { "Введите поисковый запрос" }
-
-        val like = "%${normalizedQuery.lowercase()}%"
+        val currentUserId = requireUserId(token)
         connection().use { conn ->
-            val sql = """
-                SELECT DISTINCT r.id, r.route_number, r.title, r.transport_type, r.origin, r.destination, r.schedule, r.description,
-                    r.travel_date, r.departure_time, r.arrival_time, r.fare
-                FROM transport_routes r
-                LEFT JOIN route_stops rs ON rs.route_id = r.id
-                LEFT JOIN stops s ON s.id = rs.stop_id
-                WHERE LOWER(r.route_number) LIKE ?
-                   OR LOWER(r.title) LIKE ?
-                   OR LOWER(r.transport_type) LIKE ?
-                   OR LOWER(r.origin) LIKE ?
-                   OR LOWER(r.destination) LIKE ?
-                   OR LOWER(r.description) LIKE ?
-                   OR LOWER(s.name) LIKE ?
-                ORDER BY r.route_number
-            """.trimIndent()
+            val sql = if (normalizedQuery.isBlank()) {
+                """
+                    SELECT DISTINCT r.id, r.route_number, r.route_code, r.title, r.transport_type, r.origin, r.destination, r.schedule, r.description,
+                        r.travel_date, r.departure_time, r.arrival_time, r.fare,
+                        r.assigned_user_id, COALESCE(u.display_name, u.login) AS assigned_to
+                    FROM transport_routes r
+                    LEFT JOIN users u ON u.id = r.assigned_user_id
+                    ORDER BY r.route_number
+                """.trimIndent()
+            } else {
+                """
+                    SELECT DISTINCT r.id, r.route_number, r.route_code, r.title, r.transport_type, r.origin, r.destination, r.schedule, r.description,
+                        r.travel_date, r.departure_time, r.arrival_time, r.fare,
+                        r.assigned_user_id, COALESCE(u.display_name, u.login) AS assigned_to
+                    FROM transport_routes r
+                    LEFT JOIN route_stops rs ON rs.route_id = r.id
+                    LEFT JOIN stops s ON s.id = rs.stop_id
+                    LEFT JOIN users u ON u.id = r.assigned_user_id
+                    WHERE LOWER(r.route_number) LIKE ?
+                       OR LOWER(r.title) LIKE ?
+                       OR LOWER(r.transport_type) LIKE ?
+                       OR LOWER(r.origin) LIKE ?
+                       OR LOWER(r.destination) LIKE ?
+                       OR LOWER(r.description) LIKE ?
+                       OR LOWER(s.name) LIKE ?
+                    ORDER BY r.route_number
+                """.trimIndent()
+            }
             conn.prepareStatement(sql).use { statement ->
-                repeat(7) { index -> statement.setString(index + 1, like) }
+                if (normalizedQuery.isNotBlank()) {
+                    val like = "%${normalizedQuery.lowercase()}%"
+                    repeat(7) { index -> statement.setString(index + 1, like) }
+                }
                 statement.executeQuery().use { resultSet ->
-                    return resultSet.toRouteList()
+                    return resultSet.toRouteList(currentUserId)
                 }
             }
         }
+    }
+
+    fun profile(token: String): DriverProfileResponse {
+        val userId = requireUserId(token)
+        val user = findUserById(userId) ?: throw IllegalStateException("Пользователь не найден")
+        return DriverProfileResponse(
+            login = user.login,
+            displayName = user.displayName,
+            routes = assignedRoutes(userId),
+        )
+    }
+
+    fun claimRoute(token: String, code: String): DriverProfileResponse {
+        val userId = requireUserId(token)
+        val normalized = code.trim().uppercase()
+        require(normalized.isNotBlank()) { "Введите код маршрута" }
+        connection().use { conn ->
+            val route = findRouteByCode(conn, normalized) ?: throw IllegalArgumentException("Маршрут с таким кодом не найден")
+            val ownerId = route.assignedUserId
+            if (ownerId != null && ownerId != userId) {
+                throw IllegalStateException("Маршрут уже закреплён за другим водителем")
+            }
+            if (!claimRouteOwner(conn, route.dto.id, userId)) {
+                throw IllegalStateException("Маршрут уже закреплён за другим водителем")
+            }
+        }
+        return profile(token)
+    }
+
+    fun releaseRoute(token: String, code: String): DriverProfileResponse {
+        val userId = requireUserId(token)
+        val normalized = code.trim().uppercase()
+        require(normalized.isNotBlank()) { "Введите код маршрута" }
+        connection().use { conn ->
+            val route = findRouteByCode(conn, normalized) ?: throw IllegalArgumentException("Маршрут с таким кодом не найден")
+            if (route.assignedUserId != userId) {
+                throw IllegalStateException("Этот маршрут не закреплён за вами")
+            }
+            if (!releaseRouteOwner(conn, route.dto.id, userId)) {
+                throw IllegalStateException("Этот маршрут не закреплён за вами")
+            }
+        }
+        return profile(token)
     }
 
     fun history(token: String): List<String> {
@@ -132,6 +193,7 @@ object TransportBotDatabase {
     fun addHistory(token: String, query: String): List<String> {
         val userId = requireUserId(token)
         val normalizedQuery = query.trim()
+        require(normalizedQuery.length <= 180) { "Поисковый запрос слишком длинный" }
         if (normalizedQuery.isBlank()) {
             return history(token)
         }
@@ -174,6 +236,7 @@ object TransportBotDatabase {
         val userId = requireUserId(token)
         val sanitizedText = text?.trim().orEmpty()
         val sanitizedTopic = topic?.trim()?.uppercase().orEmpty()
+        require(sanitizedText.length <= 500) { "Сообщение должно содержать не более 500 символов" }
         connection().use { conn ->
             if (sanitizedText.isNotBlank()) {
                 insertChatMessage(conn, userId, "USER", sanitizedText)
@@ -192,6 +255,10 @@ object TransportBotDatabase {
         val userId = requireUserId(token)
         connection().use { conn ->
             conn.prepareStatement("DELETE FROM chat_messages WHERE user_id = ?").use { statement ->
+                statement.setLong(1, userId)
+                statement.executeUpdate()
+            }
+            conn.prepareStatement("DELETE FROM chat_state WHERE user_id = ?").use { statement ->
                 statement.setLong(1, userId)
                 statement.executeUpdate()
             }
@@ -275,6 +342,25 @@ object TransportBotDatabase {
         }
     }
 
+    private fun findUserById(id: Long): UserRecord? = connection().use { conn ->
+        conn.prepareStatement("SELECT id, login, display_name, password_salt, password_hash FROM users WHERE id = ?").use { statement ->
+            statement.setLong(1, id)
+            statement.executeQuery().use { resultSet ->
+                if (resultSet.next()) {
+                    UserRecord(
+                        id = resultSet.getLong("id"),
+                        login = resultSet.getString("login"),
+                        displayName = resultSet.getString("display_name"),
+                        salt = resultSet.getString("password_salt"),
+                        passwordHash = resultSet.getString("password_hash"),
+                    )
+                } else {
+                    null
+                }
+            }
+        }
+    }
+
     private fun trimHistory(conn: Connection, userId: Long) {
         val idsToDelete = mutableListOf<Long>()
         conn.prepareStatement("SELECT id FROM search_history WHERE user_id = ? ORDER BY created_at DESC, id DESC").use { statement ->
@@ -313,12 +399,14 @@ object TransportBotDatabase {
         }
     }
 
-    private fun ResultSet.toRouteList(): List<TransportRouteDto> {
+    private fun ResultSet.toRouteList(currentUserId: Long? = null): List<TransportRouteDto> {
         val items = mutableListOf<TransportRouteDto>()
         while (next()) {
+            val assignedUserId = getObject("assigned_user_id")?.let { getLong("assigned_user_id") }
             items += TransportRouteDto(
                 id = getLong("id"),
                 routeNumber = getString("route_number"),
+                routeCode = getString("route_code") ?: "",
                 title = getString("title"),
                 transportType = getString("transport_type"),
                 origin = getString("origin"),
@@ -329,6 +417,9 @@ object TransportBotDatabase {
                 departureTime = getString("departure_time") ?: "",
                 arrivalTime = getString("arrival_time") ?: "",
                 fare = getString("fare") ?: "",
+                assignedTo = getString("assigned_to"),
+                isAssigned = assignedUserId != null,
+                isMine = currentUserId != null && assignedUserId == currentUserId,
             )
         }
         return items
@@ -366,12 +457,15 @@ object TransportBotDatabase {
                 CREATE TABLE IF NOT EXISTS transport_routes (
                     id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                     route_number VARCHAR(16) NOT NULL,
+                    route_code VARCHAR(32),
                     title VARCHAR(120) NOT NULL,
                     transport_type VARCHAR(40) NOT NULL,
                     origin VARCHAR(120) NOT NULL,
                     destination VARCHAR(120) NOT NULL,
                     description VARCHAR(255) NOT NULL,
-                    schedule VARCHAR(255) NOT NULL
+                    schedule VARCHAR(255) NOT NULL,
+                    assigned_user_id BIGINT,
+                    CONSTRAINT fk_transport_routes_user FOREIGN KEY (assigned_user_id) REFERENCES users(id) ON DELETE SET NULL
                 )
                 """.trimIndent()
             )
@@ -379,6 +473,9 @@ object TransportBotDatabase {
             statement.execute("ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS departure_time VARCHAR(10)")
             statement.execute("ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS arrival_time VARCHAR(10)")
             statement.execute("ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS fare VARCHAR(20)")
+            statement.execute("ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS route_code VARCHAR(32)")
+            statement.execute("ALTER TABLE transport_routes ADD COLUMN IF NOT EXISTS assigned_user_id BIGINT")
+            ensureRouteCodes(conn)
             statement.execute(
                 """
                 CREATE TABLE IF NOT EXISTS stops (
@@ -473,6 +570,7 @@ object TransportBotDatabase {
 
             data class SeedRoute(
                 val number: String,
+                val code: String,
                 val title: String,
                 val type: String,
                 val origin: String,
@@ -489,6 +587,7 @@ object TransportBotDatabase {
             val routes = listOf(
                 SeedRoute(
                     number = "12",
+                    code = "DR12-A7K3",
                     title = "Центральный маршрут",
                     type = "Автобус",
                     origin = "Центральный вокзал",
@@ -503,6 +602,7 @@ object TransportBotDatabase {
                 ),
                 SeedRoute(
                     number = "100",
+                    code = "DR100-M2Q8",
                     title = "Туристический маршрут",
                     type = "Автобус",
                     origin = "Аэропорт",
@@ -517,6 +617,7 @@ object TransportBotDatabase {
                 ),
                 SeedRoute(
                     number = "99",
+                    code = "DR99-X5N1",
                     title = "Ночной экспресс",
                     type = "Маршрутка",
                     origin = "ЖД вокзал",
@@ -531,6 +632,7 @@ object TransportBotDatabase {
                 ),
                 SeedRoute(
                     number = "7",
+                    code = "DR7-P4T9",
                     title = "Парковое кольцо",
                     type = "Троллейбус",
                     origin = "Южный район",
@@ -545,6 +647,7 @@ object TransportBotDatabase {
                 ),
                 SeedRoute(
                     number = "24",
+                    code = "DR24-L8Q2",
                     title = "Аэропорт Экспресс",
                     type = "Трамвай",
                     origin = "Аэропорт",
@@ -559,6 +662,7 @@ object TransportBotDatabase {
                 ),
                 SeedRoute(
                     number = "3",
+                    code = "DR3-Z6C4",
                     title = "Городская линия",
                     type = "Маршрутка",
                     origin = "ЖД вокзал",
@@ -573,6 +677,7 @@ object TransportBotDatabase {
                 ),
                 SeedRoute(
                     number = "18",
+                    code = "DR18-V7H5",
                     title = "Набережная",
                     type = "Автобус",
                     origin = "Микрорайон Солнечный",
@@ -588,22 +693,23 @@ object TransportBotDatabase {
             )
 
             conn.prepareStatement(
-                "INSERT INTO transport_routes(route_number, title, transport_type, origin, destination, description, schedule, travel_date, departure_time, arrival_time, fare) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO transport_routes(route_number, route_code, title, transport_type, origin, destination, description, schedule, travel_date, departure_time, arrival_time, fare) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 java.sql.Statement.RETURN_GENERATED_KEYS
             ).use { routeStatement ->
                 val routeIds = mutableMapOf<String, Long>()
                 for (route in routes) {
                     routeStatement.setString(1, route.number)
-                    routeStatement.setString(2, route.title)
-                    routeStatement.setString(3, route.type)
-                    routeStatement.setString(4, route.origin)
-                    routeStatement.setString(5, route.destination)
-                    routeStatement.setString(6, route.description)
-                    routeStatement.setString(7, route.schedule)
-                    routeStatement.setString(8, route.travelDate)
-                    routeStatement.setString(9, route.departureTime)
-                    routeStatement.setString(10, route.arrivalTime)
-                    routeStatement.setString(11, route.fare)
+                    routeStatement.setString(2, route.code)
+                    routeStatement.setString(3, route.title)
+                    routeStatement.setString(4, route.type)
+                    routeStatement.setString(5, route.origin)
+                    routeStatement.setString(6, route.destination)
+                    routeStatement.setString(7, route.description)
+                    routeStatement.setString(8, route.schedule)
+                    routeStatement.setString(9, route.travelDate)
+                    routeStatement.setString(10, route.departureTime)
+                    routeStatement.setString(11, route.arrivalTime)
+                    routeStatement.setString(12, route.fare)
                     routeStatement.executeUpdate()
                     routeStatement.generatedKeys.use { keys ->
                         if (keys.next()) {
@@ -628,6 +734,25 @@ object TransportBotDatabase {
             }
         }
 
+    }
+
+    private fun ensureRouteCodes(conn: Connection) {
+        conn.prepareStatement("SELECT id, route_number, route_code FROM transport_routes").use { statement ->
+            statement.executeQuery().use { resultSet ->
+                conn.prepareStatement("UPDATE transport_routes SET route_code = ? WHERE id = ?").use { update ->
+                    while (resultSet.next()) {
+                        val routeCode = resultSet.getString("route_code")
+                        if (routeCode.isNullOrBlank()) {
+                            val generated = "DR-${resultSet.getString("route_number")}-${UUID.randomUUID().toString().substring(0, 8).uppercase()}"
+                            update.setString(1, generated)
+                            update.setLong(2, resultSet.getLong("id"))
+                            update.addBatch()
+                        }
+                    }
+                    update.executeBatch()
+                }
+            }
+        }
     }
 
     private fun loadChatHistory(conn: Connection, userId: Long): List<ChatMessageDto> {
@@ -733,7 +858,7 @@ object TransportBotDatabase {
         if (lowered.contains("другой вопрос") || lowered == "другой" || lowered.contains("другая тема")) {
             // очищаем last_route_id и pending_action
             saveChatState(conn, userId, null, null)
-            return "Принято. Выберите новую тему вопроса. Доступно: маршрут по номеру, расписание, остановки и общие вопросы по маршрутам."
+            return "Принято. Выберите новую тему вопроса. Доступно: маршрут по номеру, расписание, остановки и общие вопросы по маршрутам. [MAIN_TOPICS]"
         }
         return when {
             lowered.contains("изменить время") || lowered.contains("перенести время") -> askForTimeChange(conn, userId)
@@ -748,38 +873,44 @@ object TransportBotDatabase {
 
     private fun handlePendingAction(conn: Connection, userId: Long, state: ChatState, text: String): String {
         val routeId = state.lastRouteId ?: return "Сначала выберите маршрут по номеру."
+        if (!canEditRoute(conn, userId, routeId)) {
+            clearPendingAction(conn, userId, routeId)
+            return "Сначала закрепите этот маршрут в личном кабинете с помощью секретного кода."
+        }
         return when (state.pendingAction) {
             PendingAction.CHANGE_TIME -> {
                 val time = text.trim()
-                if (!time.matches(Regex("\\d{2}:\\d{2}"))) {
+                if (runCatching { LocalTime.parse(time) }.isFailure) {
                     "Введите время в формате HH:MM, например 09:30."
                 } else {
                     updateRouteTime(conn, routeId, time)
                     clearPendingAction(conn, userId, routeId)
                     val route = findRouteById(conn, routeId)
-                    "Время отправления обновлено на $time. ${routeSummary(route)}"
+                    "Время отправления обновлено на $time. ${routeSummary(route?.dto)}"
                 }
             }
             PendingAction.CHANGE_DATE -> {
                 val date = text.trim()
-                if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
+                if (runCatching { LocalDate.parse(date) }.isFailure) {
                     "Введите дату в формате YYYY-MM-DD, например 2026-06-02."
                 } else {
                     updateRouteDate(conn, routeId, date)
                     clearPendingAction(conn, userId, routeId)
                     val route = findRouteById(conn, routeId)
-                    "Дата поездки обновлена на $date. ${routeSummary(route)}"
+                    "Дата поездки обновлена на $date. ${routeSummary(route?.dto)}"
                 }
             }
             PendingAction.CHANGE_DESTINATION -> {
                 val destination = text.trim()
                 if (destination.isBlank()) {
                     "Введите новое направление/пункт назначения."
+                } else if (destination.length > 120) {
+                    "Пункт назначения должен содержать не более 120 символов."
                 } else {
                     updateRouteDestination(conn, routeId, destination)
                     clearPendingAction(conn, userId, routeId)
                     val route = findRouteById(conn, routeId)
-                    "Маршрут обновлен. ${routeSummary(route)}"
+                    "Маршрут обновлен. ${routeSummary(route?.dto)}"
                 }
             }
             null -> ""
@@ -790,6 +921,8 @@ object TransportBotDatabase {
         val state = loadChatState(conn, userId)
         return if (state.lastRouteId == null) {
             "Сначала укажите номер маршрута, чтобы изменить время."
+        } else if (!canEditRoute(conn, userId, state.lastRouteId)) {
+            "Сначала закрепите этот маршрут в личном кабинете с помощью секретного кода."
         } else {
             saveChatState(conn, userId, state.lastRouteId, PendingAction.CHANGE_TIME)
             "Укажите новое время отправления (HH:MM)."
@@ -800,6 +933,8 @@ object TransportBotDatabase {
         val state = loadChatState(conn, userId)
         return if (state.lastRouteId == null) {
             "Сначала укажите номер маршрута, чтобы изменить дату."
+        } else if (!canEditRoute(conn, userId, state.lastRouteId)) {
+            "Сначала закрепите этот маршрут в личном кабинете с помощью секретного кода."
         } else {
             saveChatState(conn, userId, state.lastRouteId, PendingAction.CHANGE_DATE)
             "Укажите новую дату поездки (YYYY-MM-DD)."
@@ -810,6 +945,8 @@ object TransportBotDatabase {
         val state = loadChatState(conn, userId)
         return if (state.lastRouteId == null) {
             "Сначала укажите номер маршрута, чтобы изменить направление."
+        } else if (!canEditRoute(conn, userId, state.lastRouteId)) {
+            "Сначала закрепите этот маршрут в личном кабинете с помощью секретного кода."
         } else {
             saveChatState(conn, userId, state.lastRouteId, PendingAction.CHANGE_DESTINATION)
             "Введите новый пункт назначения маршрута."
@@ -818,7 +955,7 @@ object TransportBotDatabase {
 
     private fun routeInfoReply(conn: Connection, userId: Long, number: String?, fallback: String): String {
         if (number.isNullOrBlank()) return fallback
-        val route = findRouteByNumber(conn, number) ?: return "Маршрут $number не найден. Попробуйте 7, 12, 18 или 24."
+        val route = findRouteByNumber(conn, number)?.dto ?: return "Маршрут $number не найден. Попробуйте 7, 12, 18 или 24."
         saveChatState(conn, userId, route.id, null)
         // Возвращаем специальный маркер [AFTER_ROUTE] в конце, чтобы клиент знал, что нужно заменить набор кнопок
         return buildString {
@@ -832,14 +969,14 @@ object TransportBotDatabase {
 
     private fun routeScheduleReply(conn: Connection, userId: Long, number: String?): String {
         if (number.isNullOrBlank()) return "Напишите номер маршрута для расписания, например 12."
-        val route = findRouteByNumber(conn, number) ?: return "Маршрут $number не найден. Попробуйте 7, 12, 18 или 24."
+        val route = findRouteByNumber(conn, number)?.dto ?: return "Маршрут $number не найден. Попробуйте 7, 12, 18 или 24."
         saveChatState(conn, userId, route.id, null)
         return "Расписание маршрута ${route.routeNumber}: ${route.schedule}"
     }
 
     private fun routeStopsReply(conn: Connection, userId: Long, number: String?): String {
         if (number.isNullOrBlank()) return "Укажите номер маршрута, чтобы показать остановки."
-        val route = findRouteByNumber(conn, number) ?: return "Маршрут $number не найден. Попробуйте 7, 12, 18 или 24."
+        val route = findRouteByNumber(conn, number)?.dto ?: return "Маршрут $number не найден. Попробуйте 7, 12, 18 или 24."
         saveChatState(conn, userId, route.id, null)
         val stops = routeStops(conn, route.id)
         return if (stops.isEmpty()) {
@@ -851,7 +988,24 @@ object TransportBotDatabase {
 
     private fun routeSummary(route: TransportRouteDto?): String {
         if (route == null) return ""
-        return "Текущие данные: ${route.origin} → ${route.destination}, ${route.travelDate} ${route.departureTime}. Что изменить дальше?"
+        return "Текущие данные: ${route.origin} → ${route.destination}, ${route.travelDate} ${route.departureTime}. Что изменить дальше? [AFTER_ROUTE]"
+    }
+
+    private fun assignedRoutes(userId: Long): List<TransportRouteDto> = connection().use { conn ->
+        conn.prepareStatement(
+            """
+            SELECT r.id, r.route_number, r.route_code, r.title, r.transport_type, r.origin, r.destination, r.schedule, r.description,
+                   r.travel_date, r.departure_time, r.arrival_time, r.fare,
+                   r.assigned_user_id, COALESCE(u.display_name, u.login) AS assigned_to
+            FROM transport_routes r
+            LEFT JOIN users u ON u.id = r.assigned_user_id
+            WHERE r.assigned_user_id = ?
+            ORDER BY r.route_number
+            """.trimIndent()
+        ).use { statement ->
+            statement.setLong(1, userId)
+            statement.executeQuery().use { resultSet -> resultSet.toRouteList(userId) }
+        }
     }
 
     private fun loadChatState(conn: Connection, userId: Long): ChatState {
@@ -914,20 +1068,29 @@ object TransportBotDatabase {
         }
     }
 
-    private fun findRouteById(conn: Connection, routeId: Long): TransportRouteDto? {
+    private data class RouteLookup(
+        val dto: TransportRouteDto,
+        val assignedUserId: Long?,
+    )
+
+    private fun findRouteById(conn: Connection, routeId: Long): RouteLookup? {
         conn.prepareStatement(
             """
-            SELECT id, route_number, title, transport_type, origin, destination, schedule, description, travel_date, departure_time, arrival_time, fare
-            FROM transport_routes
-            WHERE id = ?
+            SELECT r.id, r.route_number, r.route_code, r.title, r.transport_type, r.origin, r.destination, r.schedule, r.description,
+                   r.travel_date, r.departure_time, r.arrival_time, r.fare, r.assigned_user_id, COALESCE(u.display_name, u.login) AS assigned_to
+            FROM transport_routes r
+            LEFT JOIN users u ON u.id = r.assigned_user_id
+            WHERE r.id = ?
             """.trimIndent()
         ).use { statement ->
             statement.setLong(1, routeId)
             statement.executeQuery().use { resultSet ->
                 return if (resultSet.next()) {
-                    TransportRouteDto(
+                    RouteLookup(
+                        dto = TransportRouteDto(
                         id = resultSet.getLong("id"),
                         routeNumber = resultSet.getString("route_number"),
+                        routeCode = resultSet.getString("route_code") ?: "",
                         title = resultSet.getString("title"),
                         transportType = resultSet.getString("transport_type"),
                         origin = resultSet.getString("origin"),
@@ -938,6 +1101,10 @@ object TransportBotDatabase {
                         departureTime = resultSet.getString("departure_time") ?: "",
                         arrivalTime = resultSet.getString("arrival_time") ?: "",
                         fare = resultSet.getString("fare") ?: "",
+                        assignedTo = resultSet.getString("assigned_to"),
+                        isAssigned = resultSet.getObject("assigned_user_id") != null,
+                    ),
+                        assignedUserId = resultSet.getLong("assigned_user_id").takeIf { !resultSet.wasNull() },
                     )
                 } else {
                     null
@@ -946,20 +1113,24 @@ object TransportBotDatabase {
         }
     }
 
-    private fun findRouteByNumber(conn: Connection, number: String): TransportRouteDto? {
+    private fun findRouteByNumber(conn: Connection, number: String): RouteLookup? {
         conn.prepareStatement(
             """
-            SELECT id, route_number, title, transport_type, origin, destination, schedule, description, travel_date, departure_time, arrival_time, fare
-            FROM transport_routes
-            WHERE route_number = ?
+            SELECT r.id, r.route_number, r.route_code, r.title, r.transport_type, r.origin, r.destination, r.schedule, r.description,
+                   r.travel_date, r.departure_time, r.arrival_time, r.fare, r.assigned_user_id, COALESCE(u.display_name, u.login) AS assigned_to
+            FROM transport_routes r
+            LEFT JOIN users u ON u.id = r.assigned_user_id
+            WHERE r.route_number = ?
             """.trimIndent()
         ).use { statement ->
             statement.setString(1, number)
             statement.executeQuery().use { resultSet ->
                 return if (resultSet.next()) {
-                    TransportRouteDto(
+                    RouteLookup(
+                        dto = TransportRouteDto(
                         id = resultSet.getLong("id"),
                         routeNumber = resultSet.getString("route_number"),
+                        routeCode = resultSet.getString("route_code") ?: "",
                         title = resultSet.getString("title"),
                         transportType = resultSet.getString("transport_type"),
                         origin = resultSet.getString("origin"),
@@ -970,11 +1141,82 @@ object TransportBotDatabase {
                         departureTime = resultSet.getString("departure_time") ?: "",
                         arrivalTime = resultSet.getString("arrival_time") ?: "",
                         fare = resultSet.getString("fare") ?: "",
+                        assignedTo = resultSet.getString("assigned_to"),
+                        isAssigned = resultSet.getObject("assigned_user_id") != null,
+                    ),
+                        assignedUserId = resultSet.getLong("assigned_user_id").takeIf { !resultSet.wasNull() },
                     )
                 } else {
                     null
                 }
             }
+        }
+    }
+
+    private fun findRouteByCode(conn: Connection, code: String): RouteLookup? {
+        conn.prepareStatement(
+            """
+            SELECT r.id, r.route_number, r.route_code, r.title, r.transport_type, r.origin, r.destination, r.schedule, r.description,
+                   r.travel_date, r.departure_time, r.arrival_time, r.fare, r.assigned_user_id, COALESCE(u.display_name, u.login) AS assigned_to
+            FROM transport_routes r
+            LEFT JOIN users u ON u.id = r.assigned_user_id
+            WHERE UPPER(r.route_code) = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setString(1, code.uppercase())
+            statement.executeQuery().use { resultSet ->
+                return if (resultSet.next()) {
+                    RouteLookup(
+                        dto = TransportRouteDto(
+                            id = resultSet.getLong("id"),
+                            routeNumber = resultSet.getString("route_number"),
+                            routeCode = resultSet.getString("route_code") ?: "",
+                            title = resultSet.getString("title"),
+                            transportType = resultSet.getString("transport_type"),
+                            origin = resultSet.getString("origin"),
+                            destination = resultSet.getString("destination"),
+                            schedule = resultSet.getString("schedule"),
+                            description = resultSet.getString("description"),
+                            travelDate = resultSet.getString("travel_date") ?: "",
+                            departureTime = resultSet.getString("departure_time") ?: "",
+                            arrivalTime = resultSet.getString("arrival_time") ?: "",
+                            fare = resultSet.getString("fare") ?: "",
+                            assignedTo = resultSet.getString("assigned_to"),
+                            isAssigned = resultSet.getObject("assigned_user_id") != null,
+                        ),
+                        assignedUserId = resultSet.getLong("assigned_user_id").takeIf { !resultSet.wasNull() },
+                    )
+                } else {
+                    null
+                }
+            }
+        }
+    }
+
+    private fun claimRouteOwner(conn: Connection, routeId: Long, userId: Long): Boolean {
+        conn.prepareStatement(
+            "UPDATE transport_routes SET assigned_user_id = ? WHERE id = ? AND (assigned_user_id IS NULL OR assigned_user_id = ?)"
+        ).use { statement ->
+            statement.setLong(1, userId)
+            statement.setLong(2, routeId)
+            statement.setLong(3, userId)
+            return statement.executeUpdate() == 1
+        }
+    }
+
+    private fun releaseRouteOwner(conn: Connection, routeId: Long, userId: Long): Boolean {
+        conn.prepareStatement("UPDATE transport_routes SET assigned_user_id = NULL WHERE id = ? AND assigned_user_id = ?").use { statement ->
+            statement.setLong(1, routeId)
+            statement.setLong(2, userId)
+            return statement.executeUpdate() == 1
+        }
+    }
+
+    private fun canEditRoute(conn: Connection, userId: Long, routeId: Long): Boolean {
+        conn.prepareStatement("SELECT 1 FROM transport_routes WHERE id = ? AND assigned_user_id = ?").use { statement ->
+            statement.setLong(1, routeId)
+            statement.setLong(2, userId)
+            statement.executeQuery().use { resultSet -> return resultSet.next() }
         }
     }
 

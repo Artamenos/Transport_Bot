@@ -1,5 +1,6 @@
 package com.example.cursovaya.data.network
 
+import com.example.cursovaya.BuildConfig
 import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -12,13 +13,13 @@ object ApiClient {
 
     fun initWithBaseUrl(baseUrl: String) {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
         val client = OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
             .build()
 
-        val gson = GsonBuilder().setLenient().create()
+        val gson = GsonBuilder().create()
         retrofitInstance = Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(client)

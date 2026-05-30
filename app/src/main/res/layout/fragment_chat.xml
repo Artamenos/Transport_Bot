@@ -20,7 +20,7 @@
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:background="@android:color/transparent"
-            android:contentDescription=""
+            android:contentDescription="@string/chat_back"
             android:src="@android:drawable/ic_media_previous" />
 
         <TextView
@@ -28,7 +28,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Чат"
+            android:text="@string/chat_title"
             android:textAlignment="center"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -48,7 +48,7 @@
         android:paddingTop="4dp"
         android:paddingBottom="4dp"
         android:background="@drawable/chat_date_pill"
-        android:text="Сегодня"
+        android:text="@string/chat_today"
         android:textSize="12sp"
         app:layout_constraintTop_toBottomOf="@id/chatHeader"
         app:layout_constraintStart_toStartOf="parent"
@@ -113,7 +113,7 @@
                 android:background="@drawable/chat_quick_reply"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:text="Маршрут по ID"
+                android:text="@string/chat_topic_route"
                 android:textAllCaps="false" />
 
             <com.google.android.material.button.MaterialButton
@@ -124,7 +124,7 @@
                 android:background="@drawable/chat_quick_reply"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:text="Расписание"
+                android:text="@string/chat_topic_schedule"
                 android:textAllCaps="false" />
         </LinearLayout>
 
@@ -137,7 +137,7 @@
             android:background="@drawable/chat_quick_reply"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
-            android:text="Вопрос по маршруту"
+            android:text="@string/chat_topic_question"
             android:textAllCaps="false" />
 
         <!-- Other question button shown while in a scenario -->
@@ -151,7 +151,7 @@
             android:background="@drawable/chat_quick_reply"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
-            android:text="Другой вопрос"
+            android:text="@string/chat_other_question"
             android:textAllCaps="false" />
 
         <!-- Buttons shown after a route is selected -->
@@ -171,7 +171,7 @@
                 android:background="@drawable/chat_quick_reply"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:text="Время"
+                android:text="@string/chat_change_time"
                 android:textAllCaps="false" />
 
             <com.google.android.material.button.MaterialButton
@@ -182,7 +182,7 @@
                 android:background="@drawable/chat_quick_reply"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:text="Дата"
+                android:text="@string/chat_change_date"
                 android:textAllCaps="false" />
 
             <com.google.android.material.button.MaterialButton
@@ -193,7 +193,7 @@
                 android:background="@drawable/chat_quick_reply"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:text="Маршрут"
+                android:text="@string/chat_change_route"
                 android:textAllCaps="false" />
         </LinearLayout>
     </LinearLayout>
@@ -202,6 +202,7 @@
         android:id="@+id/inputBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         app:layout_constraintStart_toStartOf="parent"
@@ -212,8 +213,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="Сообщение"
-            app:boxBackgroundMode="none">
+            android:hint="@string/chat_message_hint"
+            app:boxBackgroundMode="none"
+            app:hintEnabled="true">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/editChatInput"
@@ -222,19 +224,29 @@
                 android:background="@drawable/chat_input_background"
                 android:imeOptions="actionSend"
                 android:inputType="text"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp"
+                android:minHeight="48dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
                 android:singleLine="true" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonSend"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="8dp"
-            android:text="Отправить"
-            android:textAllCaps="false" />
+            android:minHeight="48dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:contentDescription="@string/chat_send_message"
+            android:text=""
+            android:textAllCaps="false"
+            app:cornerRadius="14dp"
+            app:icon="@android:drawable/ic_menu_send"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconSize="22dp" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

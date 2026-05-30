@@ -4,8 +4,10 @@ import com.example.cursovaya.data.model.AuthRequest
 import com.example.cursovaya.data.model.AuthResponse
 import com.example.cursovaya.data.model.ChatHistoryResponse
 import com.example.cursovaya.data.model.ChatSendRequest
+import com.example.cursovaya.data.model.DriverProfileResponse
 import com.example.cursovaya.data.model.HistoryRequest
 import com.example.cursovaya.data.model.HistoryResponse
+import com.example.cursovaya.data.model.RouteCodeRequest
 import com.example.cursovaya.data.model.SearchResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -50,4 +52,19 @@ interface TransportApi {
 
     @DELETE("api/chat")
     suspend fun clearChat(@Header("Authorization") token: String)
+
+    @GET("api/me/profile")
+    suspend fun profile(@Header("Authorization") token: String): DriverProfileResponse
+
+    @POST("api/routes/claim")
+    suspend fun claimRoute(
+        @Header("Authorization") token: String,
+        @Body request: RouteCodeRequest,
+    ): DriverProfileResponse
+
+    @POST("api/routes/release")
+    suspend fun releaseRoute(
+        @Header("Authorization") token: String,
+        @Body request: RouteCodeRequest,
+    ): DriverProfileResponse
 }

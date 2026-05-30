@@ -16,6 +16,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.http.*
 fun main() {
     embeddedServer(Netty, host = "0.0.0.0", port = 8080) {
@@ -36,6 +37,14 @@ fun Application.module() {
     }
     install(ContentNegotiation) {
         gson { setPrettyPrinting() }
+    }
+    install(StatusPages) {
+        exception<IllegalArgumentException> { call, error ->
+            call.respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Некорректный запрос"))
+        }
+        exception<IllegalStateException> { call, error ->
+            call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+        }
     }
 
     routing {
@@ -76,7 +85,7 @@ fun Application.module() {
             val token = call.bearerToken()
             val query = call.request.queryParameters["q"].orEmpty()
             try {
-                val results = TransportBotDatabase.search(query)
+                val results = TransportBotDatabase.search(token, query)
                 TransportBotDatabase.addHistory(token, query)
                 call.respond(SearchResponse(results))
             } catch (error: IllegalStateException) {
@@ -143,6 +152,41 @@ fun Application.module() {
                 call.respond(MessageResponse("История чата очищена"))
             } catch (error: IllegalStateException) {
                 call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            }
+        }
+
+        get("/api/me/profile") {
+            val token = call.bearerToken()
+            try {
+                call.respond(TransportBotDatabase.profile(token))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            }
+        }
+
+        post("/api/routes/claim") {
+            val token = call.bearerToken()
+            val request = call.receive<RouteCodeRequest>()
+            try {
+                call.respond(TransportBotDatabase.claimRoute(token, request.code))
+            } catch (error: IllegalStateException) {
+                val status = if (TransportBotDatabase.userIdByToken(token) == null) HttpStatusCode.Unauthorized else HttpStatusCode.Conflict
+                call.respond(status, MessageResponse(error.message ?: "Не удалось закрепить маршрут"))
+            } catch (error: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Некорректный код маршрута"))
+            }
+        }
+
+        post("/api/routes/release") {
+            val token = call.bearerToken()
+            val request = call.receive<RouteCodeRequest>()
+            try {
+                call.respond(TransportBotDatabase.releaseRoute(token, request.code))
+            } catch (error: IllegalStateException) {
+                val status = if (TransportBotDatabase.userIdByToken(token) == null) HttpStatusCode.Unauthorized else HttpStatusCode.Conflict
+                call.respond(status, MessageResponse(error.message ?: "Не удалось освободить маршрут"))
+            } catch (error: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Некорректный код маршрута"))
             }
         }
     }

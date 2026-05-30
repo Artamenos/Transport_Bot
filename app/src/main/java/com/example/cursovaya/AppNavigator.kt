@@ -5,4 +5,5 @@ interface AppNavigator {
     fun openRegister()
     fun openSearch()
     fun openChat()
+    fun openProfile()
 }

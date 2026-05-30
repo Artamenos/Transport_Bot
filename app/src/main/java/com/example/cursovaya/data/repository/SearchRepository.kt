@@ -3,6 +3,8 @@ package com.example.cursovaya.data.repository
 import android.content.Context
 import com.example.cursovaya.data.local.AppPrefs
 import com.example.cursovaya.data.model.HistoryRequest
+import com.example.cursovaya.data.model.RouteCodeRequest
+import com.example.cursovaya.data.model.DriverProfileResponse
 import com.example.cursovaya.data.model.TransportRouteDto
 import com.example.cursovaya.data.network.ApiClient
 
@@ -32,7 +34,7 @@ class SearchRepository(context: Context) {
     suspend fun search(query: String): List<TransportRouteDto> {
         val token = requireToken()
         val response = api.search(token, query)
-        val updatedHistory = api.addHistory(token, HistoryRequest(query)).items
+        val updatedHistory = api.history(token).items
         prefs.replaceHistory(updatedHistory)
         return response.results
     }
@@ -40,6 +42,21 @@ class SearchRepository(context: Context) {
     suspend fun loadPopularRoutes(): List<TransportRouteDto> {
         val token = requireToken()
         return api.search(token, "").results
+    }
+
+    suspend fun loadProfile(): DriverProfileResponse {
+        val token = requireToken()
+        return api.profile(token)
+    }
+
+    suspend fun claimRoute(code: String): DriverProfileResponse {
+        val token = requireToken()
+        return api.claimRoute(token, RouteCodeRequest(code.trim()))
+    }
+
+    suspend fun releaseRoute(code: String): DriverProfileResponse {
+        val token = requireToken()
+        return api.releaseRoute(token, RouteCodeRequest(code.trim()))
     }
 
     suspend fun addHistory(item: String): List<String> {

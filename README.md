@@ -4,7 +4,7 @@
 
 ```powershell
 .\gradlew.bat :server:installDist
-cmd /c D:\cursovaya\server\build\install\server\bin\server.bat
+cmd /c .\server\build\install\server\bin\server.bat
 ```
 
 Сервер слушает `0.0.0.0:8080` (доступен в вашей Wi‑Fi сети).

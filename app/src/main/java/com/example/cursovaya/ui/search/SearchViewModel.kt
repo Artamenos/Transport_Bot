@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.cursovaya.data.model.TransportRouteDto
 import com.example.cursovaya.data.repository.AuthRepository
 import com.example.cursovaya.data.repository.SearchRepository
+import com.example.cursovaya.data.repository.toUserMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,11 +51,15 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             runCatching { repository.loadPopularRoutes() }
                 .onSuccess { routes ->
                     _state.update {
-                        it.copy(
-                            results = routes,
-                            showPopularRoutes = true,
-                            showHistory = false,
-                        )
+                        if (it.query.isBlank()) {
+                            it.copy(
+                                results = routes,
+                                showPopularRoutes = true,
+                                showHistory = false,
+                            )
+                        } else {
+                            it
+                        }
                     }
                 }
                 .onFailure {
@@ -89,12 +94,16 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         _state.update {
             it.copy(
                 query = query,
+                isLoading = false,
                 showHistory = query.isBlank() && it.history.isNotEmpty(),
                 showPopularRoutes = query.isBlank(),
                 showErrorState = false,
                 showEmptyState = false,
                 errorMessage = null,
             )
+        }
+        if (query.isBlank()) {
+            loadPopularRoutes()
         }
     }
 
@@ -106,7 +115,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     fun search() {
         val query = state.value.query.trim()
-        if (query.isBlank()) return
+        if (query.isBlank()) {
+            loadPopularRoutes()
+            return
+        }
         viewModelScope.launch {
             _state.update {
                 it.copy(
@@ -122,27 +134,35 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 .onSuccess { results ->
                     val history = repository.currentHistory()
                     _state.update {
-                        it.copy(
-                            isLoading = false,
-                            results = results,
-                            history = history,
-                            showHistory = false,
-                            showPopularRoutes = false,
-                            showEmptyState = results.isEmpty(),
-                            showErrorState = false,
-                            errorMessage = null,
-                        )
+                        if (it.query.trim() == query) {
+                            it.copy(
+                                isLoading = false,
+                                results = results,
+                                history = history,
+                                showHistory = false,
+                                showPopularRoutes = false,
+                                showEmptyState = results.isEmpty(),
+                                showErrorState = false,
+                                errorMessage = null,
+                            )
+                        } else {
+                            it
+                        }
                     }
                 }
                 .onFailure { error ->
                     _state.update {
-                        it.copy(
-                            isLoading = false,
-                            showErrorState = true,
-                            showPopularRoutes = false,
-                            showEmptyState = false,
-                            errorMessage = error.message ?: "Поиск завершился с ошибкой",
-                        )
+                        if (it.query.trim() == query) {
+                            it.copy(
+                                isLoading = false,
+                                showErrorState = true,
+                                showPopularRoutes = false,
+                                showEmptyState = false,
+                                errorMessage = error.toUserMessage("Поиск завершился с ошибкой"),
+                            )
+                        } else {
+                            it
+                        }
                     }
                 }
         }

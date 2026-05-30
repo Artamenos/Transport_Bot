@@ -19,6 +19,7 @@ data class SearchResponse(
 data class TransportRouteDto(
     val id: Long,
     val routeNumber: String,
+    val routeCode: String = "",
     val title: String,
     val transportType: String,
     val origin: String,
@@ -29,10 +30,23 @@ data class TransportRouteDto(
     val departureTime: String,
     val arrivalTime: String,
     val fare: String,
+    val assignedTo: String? = null,
+    val isAssigned: Boolean = false,
+    val isMine: Boolean = false,
 )
 
 data class HistoryRequest(
     val query: String,
+)
+
+data class RouteCodeRequest(
+    val code: String,
+)
+
+data class DriverProfileResponse(
+    val login: String,
+    val displayName: String,
+    val routes: List<TransportRouteDto>,
 )
 
 data class HistoryResponse(

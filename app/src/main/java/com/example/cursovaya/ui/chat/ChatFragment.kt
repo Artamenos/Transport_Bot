@@ -92,10 +92,9 @@ class ChatFragment : Fragment() {
                             // inspect last bot message for markers
                             val last = state.messages.lastOrNull()
                             if (last != null && !last.isUser) {
-                                val text = last.text
-                                if (text.contains("[MAIN_TOPICS]")) {
+                                if (last.showMainTopics) {
                                     showMainTopics()
-                                } else if (text.contains("[AFTER_ROUTE]")) {
+                                } else if (last.showRouteActions) {
                                     // show route action buttons and change header prompt if needed
                                     showRouteActions()
                                 }

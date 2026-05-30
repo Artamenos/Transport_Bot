@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cursovaya.data.model.ChatMessageDto
 import com.example.cursovaya.data.repository.ChatRepository
+import com.example.cursovaya.data.repository.toUserMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +43,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 .onFailure { error ->
                     _state.update {
-                        it.copy(isLoading = false, errorMessage = error.message ?: "Не удалось загрузить чат")
+                        it.copy(isLoading = false, errorMessage = error.toUserMessage("Не удалось загрузить чат"))
                     }
                 }
         }
@@ -72,7 +73,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _state.update { it.copy(isLoading = false, messages = emptyList()) }
                 }
                 .onFailure { error ->
-                    _state.update { it.copy(isLoading = false, errorMessage = error.message ?: "Не удалось очистить чат") }
+                    _state.update { it.copy(isLoading = false, errorMessage = error.toUserMessage("Не удалось очистить чат")) }
                 }
         }
     }
@@ -97,17 +98,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 .onFailure { error ->
-                    _state.update { it.copy(isLoading = false, errorMessage = error.message ?: "Не удалось отправить сообщение") }
+                    _state.update { it.copy(isLoading = false, errorMessage = error.toUserMessage("Не удалось отправить сообщение")) }
                 }
         }
     }
 
     private fun List<ChatMessageDto>.toUi(): List<ChatMessageUi> = map {
+        val showMainTopics = it.text.contains("[MAIN_TOPICS]")
+        val showRouteActions = it.text.contains("[AFTER_ROUTE]")
         ChatMessageUi(
             id = it.id,
-            text = it.text,
+            text = it.text
+                .replace("[MAIN_TOPICS]", "")
+                .replace("[AFTER_ROUTE]", "")
+                .trim(),
             isUser = it.sender.equals("USER", ignoreCase = true),
             time = formatTime(it.createdAt),
+            showMainTopics = showMainTopics,
+            showRouteActions = showRouteActions,
         )
     }
 

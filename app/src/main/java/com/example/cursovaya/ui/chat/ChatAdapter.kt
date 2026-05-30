@@ -52,4 +52,6 @@ data class ChatMessageUi(
     val text: String,
     val isUser: Boolean,
     val time: String? = null,
+    val showMainTopics: Boolean = false,
+    val showRouteActions: Boolean = false,
 )

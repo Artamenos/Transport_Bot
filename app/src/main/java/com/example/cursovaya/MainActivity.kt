@@ -10,6 +10,7 @@ import com.example.cursovaya.databinding.ActivityMainBinding
 import com.example.cursovaya.ui.auth.LoginFragment
 import com.example.cursovaya.ui.auth.RegisterFragment
 import com.example.cursovaya.ui.chat.ChatFragment
+import com.example.cursovaya.ui.profile.ProfileFragment
 import com.example.cursovaya.ui.search.SearchFragment
 
 class MainActivity : AppCompatActivity(), AppNavigator {
@@ -58,6 +59,12 @@ class MainActivity : AppCompatActivity(), AppNavigator {
     override fun openChat() {
         supportFragmentManager.beginTransaction()
             .replace(R.id.main_container, ChatFragment())
+            .commit()
+    }
+
+    override fun openProfile() {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.main_container, ProfileFragment())
             .commit()
     }
 }
