@@ -1,0 +1,117 @@
+package com.example.cursovaya.server
+
+import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.gson.gson
+import io.ktor.server.application.Application
+import io.ktor.server.application.call
+import io.ktor.server.application.install
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.netty.Netty
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
+import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.callloging.CallLogging
+
+fun main() {
+    embeddedServer(Netty, host = "0.0.0.0", port = 8080) {
+        module()
+    }.start(wait = true)
+}
+
+fun Application.module() {
+    install(CallLogging)
+    install(ContentNegotiation) {
+        gson { setPrettyPrinting() }
+    }
+
+    routing {
+        get("/health") {
+            call.respond(MessageResponse("Сервер транспортного бота работает"))
+        }
+
+        post("/api/auth/register") {
+            val request = call.receive<AuthRequest>()
+            try {
+                val response = TransportBotDatabase.register(request.login, request.password, request.displayName)
+                call.respond(HttpStatusCode.Created, response)
+            } catch (error: IllegalStateException) {
+                val status = if (error.message?.contains("уже существует", ignoreCase = true) == true) {
+                    HttpStatusCode.Conflict
+                } else {
+                    HttpStatusCode.BadRequest
+                }
+                call.respond(status, MessageResponse(error.message ?: "Ошибка регистрации"))
+            } catch (error: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Ошибка регистрации"))
+            }
+        }
+
+        post("/api/auth/login") {
+            val request = call.receive<AuthRequest>()
+            try {
+                val response = TransportBotDatabase.login(request.login, request.password)
+                call.respond(response)
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Ошибка авторизации"))
+            } catch (error: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Ошибка авторизации"))
+            }
+        }
+
+        get("/api/search") {
+            val token = call.bearerToken()
+            val query = call.request.queryParameters["q"].orEmpty()
+            try {
+                val results = TransportBotDatabase.search(query)
+                TransportBotDatabase.addHistory(token, query)
+                call.respond(SearchResponse(results))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            } catch (error: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Некорректный запрос"))
+            }
+        }
+
+        get("/api/history") {
+            val token = call.bearerToken()
+            try {
+                call.respond(HistoryResponse(TransportBotDatabase.history(token)))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            }
+        }
+
+        post("/api/history") {
+            val token = call.bearerToken()
+            val request = call.receive<HistoryRequest>()
+            try {
+                call.respond(HistoryResponse(TransportBotDatabase.addHistory(token, request.query)))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            }
+        }
+
+        delete("/api/history") {
+            val token = call.bearerToken()
+            try {
+                TransportBotDatabase.clearHistory(token)
+                call.respond(MessageResponse("История поиска очищена"))
+            } catch (error: IllegalStateException) {
+                call.respond(HttpStatusCode.Unauthorized, MessageResponse(error.message ?: "Требуется авторизация"))
+            }
+        }
+    }
+}
+
+private fun io.ktor.server.application.ApplicationCall.bearerToken(): String {
+    val header = request.headers["Authorization"] ?: throw IllegalStateException("Требуется авторизация")
+    return header.removePrefix("Bearer ").trim().takeIf { it.isNotBlank() }
+        ?: throw IllegalStateException("Требуется авторизация")
+}
+
+
+
